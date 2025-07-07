@@ -148,16 +148,16 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 	faceRect := rects[0]
 	width, height := faceRect.Dx(), faceRect.Dy()
 
-	newWidth := int(float64(width) * zoom)
-	newHeight := int(float64(height) * zoom)
+	// The crop area should be a square, expanded by the zoom factor.
+	cropSide := int(float64(width) * zoom)
 
 	centerX := faceRect.Min.X + width/2
 	centerY := faceRect.Min.Y + height/2
 
-	minX := centerX - newWidth/2
-	minY := centerY - newHeight/2
-	maxX := centerX + newWidth/2
-	maxY := centerY + newHeight/2
+	minX := centerX - cropSide/2
+	minY := centerY - cropSide/2
+	maxX := centerX + cropSide/2
+	maxY := centerY + cropSide/2
 
 	// Clamp to image bounds
 	bounds := img.Bounds()
@@ -166,13 +166,28 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 	maxX = min(maxX, bounds.Max.X)
 	maxY = min(maxY, bounds.Max.Y)
 
-	croppedImg, err := cropImage(img, image.Rect(minX, minY, maxX, maxY))
+	// To avoid distortion, we must crop a square.
+	// The side of the square is the smaller of the clamped width/height.
+	cropWidth := maxX - minX
+	cropHeight := maxY - minY
+	squareSide := min(cropWidth, cropHeight)
+
+	// Center the square crop within the clamped rectangle.
+	finalMinX := minX + (cropWidth-squareSide)/2
+	finalMinY := minY + (cropHeight-squareSide)/2
+	finalMaxX := finalMinX + squareSide
+	finalMaxY := finalMinY + squareSide
+
+	croppedImg, err := cropImage(img, image.Rect(finalMinX, finalMinY, finalMaxX, finalMaxY))
 	if err != nil {
 		http.Error(w, "Failed to crop image", http.StatusInternalServerError)
 		return
 	}
 
-	resizedImg := resize.Resize(uint(float64(newWidth)*size), uint(float64(newHeight)*size), croppedImg, resize.Lanczos3)
+	// Resize the square crop to the final size.
+	// The final size is determined by the original crop-side and the size multiplier.
+	finalSize := uint(float64(cropSide) * size)
+	resizedImg := resize.Resize(finalSize, finalSize, croppedImg, resize.Lanczos3)
 
 	buffer := new(bytes.Buffer)
 	if err := jpeg.Encode(buffer, resizedImg, nil); err != nil {
