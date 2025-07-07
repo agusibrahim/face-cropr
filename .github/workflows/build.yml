@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+    - name: Build
+      run: |
+        GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o face-cropr-${{ matrix.goos }}-${{ matrix.goarch }} main.go
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v1
+      with:
+        files: face-cropr-${{ matrix.goos }}-${{ matrix.goarch }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Clean up
+      run: rm face-cropr-${{ matrix.goos }}-${{ matrix.goarch }}
