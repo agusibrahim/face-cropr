@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"image"
 	"image/draw"
@@ -201,12 +202,16 @@ func min(a, b int) int {
 }
 
 func main() {
+	port := flag.Int("port", 8037, "server port")
+	flag.Parse()
+
 	detector, err := NewFaceDetector(cascadeFile)
 	if err != nil {
 		log.Fatalf("Failed to create face detector: %v", err)
 	}
 
 	http.HandleFunc("/crop", detector.cropHandler)
-	log.Println("Server started on :8081")
-	log.Fatal(http.ListenAndServe(":8081", nil))
+	addr := fmt.Sprintf(":%d", *port)
+	log.Printf("Server started on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, nil))
 }
