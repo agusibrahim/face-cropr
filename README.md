@@ -1,4 +1,5 @@
 # Face Crop API
+<img width="617" alt="banner_facecropr" src="https://github.com/user-attachments/assets/4a797c51-2ebd-43e8-ae64-1b5a53774efa" />
 
 This API provides a face detection and cropping service using the Pigo face detection library.
 
