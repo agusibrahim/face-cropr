@@ -18,6 +18,8 @@ import (
 	"github.com/nfnt/resize"
 )
 
+const defaultFaceBase64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAgMDAwMDBAcFBAQEBAkGBwUHCgkLCwoJCgoMDREODAwQDAoKDhQPEBESExMTCw4UFhQSFhESExL/wgALCABkAGQBAREA/8QAHAABAAMAAwEBAAAAAAAAAAAAAAUGBwEDBAII/9oACAEBAAAAAP26AAH3YfVBRwD06tLuvO6iBoN1HVjHlBrc2GU18Gm2kcY5GgldZ9BUc3A9Gl2N1ZlWwSWqSA4o9CHZr8mDjNqmWnTQEbjZo1wAcYr5Gn2cAx6K/8QANxAAAQMCAQgHBgcBAAAAAAAAAgEDBAURBgASICEiQVFhBxAwMUORwRMUcnOx4SMmQGJxgZLw/9oACAEBAAE/AP0LLJvuC2wBOGepBBFVVyhYAqssUJ0WYqKnc4d18kyc6NZ4jdqTENeG0OVSoE+j658YgDc4m0HmnY06A9U5jcWIN3XVsl9yccqBhyLQI+awKG8SfiPKm0S+icus2xcAgcFCEksqKl0VMsY4RGmIU2mDaN4jaeFzTl9Ow6N6WLUJ+eabb5ezb5CK+q6LzISGXGnhQm3BzSRd6LlU4K02oyYp+A4oovLcvlbTwaKDhmBbe3dfNdLHQoOJpObvBvztp9Hk9JND93VduGaiqftVbppYinJUq3MkAtwNywLxEdSfTTw3XToFRF9EUmSTNeBO9R+2UOYzNjg/FMXG3BuJJv0Ma4nCBGODCO8p0bGo+EO/+17CBT5FSkCxBaJ10uHcicV4ZYTwu7QGjJ+WbhupraBbNJ9+fW817dk288288bZwLYh5ouWIcGTKVnyGVKZGVbk5a5j8SeunQqG/XpnsY2yA2V122oB/7uTKj0WLRIqMwgtvI11ka8VXSxZgpDRybRgzTTadYHuLio8+WjHYOS82ywmc46SCCcVVcqDRWqHTwjs2Uu9w95lvXsMeYfGnyknRBzWJJWcFO4T++h0d05JVZOQesYjd0+ItSevY4hpyVSjSo9tom7hyJNaaHRrGQKXKe3vP5v8AlOyq8f3SqTGU8J8xT+M5evo8T8uD85z69linViOo/P8AROr/2Q=="
+
 //go:embed facefinder
 var cascadeFile []byte
 
@@ -95,12 +97,27 @@ func cropImage(img image.Image, crop image.Rectangle) (image.Image, error) {
 	return simg.SubImage(crop), nil
 }
 
+func sendDefaultImageOnError(w http.ResponseWriter, err error, message string) {
+	log.Printf("%s: %v", message, err)
+	decoded, decodeErr := base64.StdEncoding.DecodeString(defaultFaceBase64)
+	if decodeErr != nil {
+		log.Printf("Failed to decode default face image: %v", decodeErr)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(decoded)))
+	if _, writeErr := w.Write(decoded); writeErr != nil {
+		log.Printf("Unable to write default image: %v", writeErr)
+	}
+}
+
 func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	query := r.URL.Query()
 	srcURL, err := base64.StdEncoding.DecodeString(query.Get("src"))
 	if err != nil {
-		http.Error(w, "Invalid src parameter", http.StatusBadRequest)
+		sendDefaultImageOnError(w, err, "Invalid src parameter")
 		return
 	}
 
@@ -116,14 +133,14 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := http.Get(string(srcURL))
 	if err != nil {
-		http.Error(w, "Failed to download image", http.StatusInternalServerError)
+		sendDefaultImageOnError(w, err, "Failed to download image")
 		return
 	}
 	defer resp.Body.Close()
 
 	img, _, err := image.Decode(resp.Body)
 	if err != nil {
-		http.Error(w, "Failed to decode image", http.StatusInternalServerError)
+		sendDefaultImageOnError(w, err, "Failed to decode image")
 		return
 	}
 
@@ -133,13 +150,13 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("No faces detected, returning original image.")
 		buffer := new(bytes.Buffer)
 		if err := jpeg.Encode(buffer, img, nil); err != nil {
-			http.Error(w, "Failed to encode original image", http.StatusInternalServerError)
+			sendDefaultImageOnError(w, err, "Failed to encode original image")
 			return
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Header().Set("Content-Length", strconv.Itoa(len(buffer.Bytes())))
 		if _, err := w.Write(buffer.Bytes()); err != nil {
-			log.Println("unable to write image.")
+			log.Printf("unable to write image: %v", err)
 		}
 		return
 	}
@@ -179,7 +196,7 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 
 	croppedImg, err := cropImage(img, image.Rect(finalMinX, finalMinY, finalMaxX, finalMaxY))
 	if err != nil {
-		http.Error(w, "Failed to crop image", http.StatusInternalServerError)
+		sendDefaultImageOnError(w, err, "Failed to crop image")
 		return
 	}
 
@@ -190,14 +207,14 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 
 	buffer := new(bytes.Buffer)
 	if err := jpeg.Encode(buffer, resizedImg, nil); err != nil {
-		http.Error(w, "Failed to encode image", http.StatusInternalServerError)
+		sendDefaultImageOnError(w, err, "Failed to encode image")
 		return
 	}
 
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.Itoa(len(buffer.Bytes())))
 	if _, err := w.Write(buffer.Bytes()); err != nil {
-		log.Println("unable to write image.")
+		log.Printf("unable to write image: %v", err)
 	}
 }
 
