@@ -72,4 +72,6 @@ go build -o face-cropr main.go
 
 This will produce a single binary executable `face-cropr` that includes the embedded cascade file.
 
-This README provides a comprehensive overview of the face crop API feature implemented in the project.
+---
+
+> This project is actually a result of Vibe Coding with Gemini Pro.
