@@ -161,7 +161,7 @@ func (fd *FaceDetector) cropHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	faceRect := rects[0]
+	faceRect := rects[len(rects)-1]
 	width, height := faceRect.Dx(), faceRect.Dy()
 
 	// The crop area should be a square, expanded by the zoom factor.
