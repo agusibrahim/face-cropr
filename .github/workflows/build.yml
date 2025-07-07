@@ -23,14 +23,14 @@ jobs:
 
     - name: Build
       run: |
-        GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o face-cropr-${{ matrix.goos }}-${{ matrix.goarch }} main.go
+        GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o facecropr-${{ matrix.goos }}-${{ matrix.goarch }} main.go
 
     - name: Upload Release Asset
       uses: softprops/action-gh-release@v1
       with:
-        files: face-cropr-${{ matrix.goos }}-${{ matrix.goarch }}
+        files: facecropr-${{ matrix.goos }}-${{ matrix.goarch }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Clean up
-      run: rm face-cropr-${{ matrix.goos }}-${{ matrix.goarch }}
+      run: rm facecropr-${{ matrix.goos }}-${{ matrix.goarch }}
